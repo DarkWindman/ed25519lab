@@ -4,7 +4,7 @@ import unittest
 from random import randint, seed
 
 from ed25519lab.ecdh import ecdh_ed25519
-from ed25519lab.ed25519 import G, GE, Scalar
+from ed25519lab.ed25519 import GE, G, Scalar
 from ed25519lab.keys import pubkey_gen
 
 L = Scalar.SIZE

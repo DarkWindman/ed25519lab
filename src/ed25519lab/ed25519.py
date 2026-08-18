@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from typing import Self
 
-__all__ = ["FE", "Scalar", "GE", "G"]
+__all__ = ["FE", "GE", "G", "Scalar"]
 
 
 class APrimeFE:
@@ -199,7 +199,7 @@ _D = FE(-121665) / FE(121666)
 class Scalar(APrimeFE):
     """An integer modulo L, the prime order of the Ed25519 subgroup.
 
-    Byte I/O is little-endian.
+    Byte I/O is little-endian; see the module docstring.
     """
 
     SIZE = 2**252 + 27742317777372353535851937790883648493

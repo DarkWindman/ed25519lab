@@ -39,10 +39,10 @@ signatures; the MPSW18 multi-party attack does not apply. `aux` is optional
 extra entropy.
 """
 
-from .ed25519 import G, GE, Scalar
+from .ed25519 import GE, G, Scalar
 from .util import domain_hash
 
-__all__ = ["internal_sign", "internal_verify", "TAG_NONCE", "TAG_CHALLENGE"]
+__all__ = ["TAG_CHALLENGE", "TAG_NONCE", "internal_sign", "internal_verify"]
 
 TAG_NONCE = "ChillDKG-ed25519-v1/int/nonce"
 TAG_CHALLENGE = "ChillDKG-ed25519-v1/int/challenge"

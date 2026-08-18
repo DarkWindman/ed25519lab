@@ -5,7 +5,7 @@ import unittest
 from random import randint, seed
 
 from ed25519lab.ecdh import TAG_ECDH
-from ed25519lab.ed25519 import G, GE, Scalar
+from ed25519lab.ed25519 import GE, G, Scalar
 from ed25519lab.internal_sig import (
     NO_AUX,
     TAG_CHALLENGE,

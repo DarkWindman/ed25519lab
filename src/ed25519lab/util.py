@@ -13,11 +13,11 @@ int_from_bytes are big-endian; the names are kept because the role is unchanged.
 import hashlib
 
 __all__ = [
-    "domain_hash",
     "bytes_from_int",
+    "domain_hash",
+    "hash_sha512",
     "int_from_bytes",
     "xor_bytes",
-    "hash_sha512",
 ]
 
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Timing for every ed25519lab primitive.
 
     python3 bench.py            # everything
@@ -18,8 +17,8 @@ from random import randint, seed
 # Run from a fresh clone without installing, same as test/__init__.py.
 sys.path.insert(0, str(Path(__file__).parent / "src/"))
 
-from ed25519lab.ed25519 import FE, G, GE, Scalar, _mul_int, _recover_x
 from ed25519lab.ecdh import ecdh_ed25519
+from ed25519lab.ed25519 import FE, GE, G, Scalar, _mul_int, _recover_x
 from ed25519lab.internal_sig import internal_sign, internal_verify
 from ed25519lab.keys import pubkey_gen
 from ed25519lab.util import domain_hash
@@ -78,7 +77,7 @@ def main() -> None:
     # --- group ---
     bench("group", "GE add", lambda: pt + pt)
     bench("group", "GE neg", lambda: -pt)
-    bench("group", "GE eq", lambda: pt == pt)
+    bench("group", "GE eq", lambda: pt == pt)  # noqa: PLR0124 - measuring __eq__
     bench("group", "GE scalar mul (252-bit)", lambda: a * G)
     bench("group", "GE scalar mul (8-bit)", lambda: Scalar(200) * G)
     bench("group", "GE.sum of 10", lambda: GE.sum(*([pt] * 10)))

@@ -4,7 +4,7 @@ import hashlib
 import unittest
 from random import randint, seed
 
-from ed25519lab.ed25519 import FE, G, GE, Scalar
+from ed25519lab.ed25519 import FE, GE, G, Scalar
 from ed25519lab.keys import pubkey_gen
 from ed25519lab.util import (
     bytes_from_int,
@@ -71,7 +71,8 @@ class PrimeFieldTests(unittest.TestCase):
             a, b = FE(randint(0, P - 1)), FE(randint(1, P - 1))
             self.assertEqual(a + b - b, a)
             self.assertEqual(a * b / b, a)
-            self.assertEqual(-(-a), a)
+            neg_a = -a
+            self.assertEqual(-neg_a, a)
             self.assertEqual(a**2, a * a)
 
 

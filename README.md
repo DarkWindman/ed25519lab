@@ -108,6 +108,16 @@ Timing
     python3 bench.py            # all primitives
     python3 bench.py decode     # filter by substring or group name
 
+Linting
+-------
+
+    uvx ruff@0.16.3 check .
+    uvx mypy@2.3.1 .
+
+The versions are pinned in CI on purpose: `uvx ruff` with no version resolves to
+the latest release, so a ruff upgrade can turn CI red on a day nobody touched
+the code. Bump them deliberately.
+
 Documentation
 -------------
 

@@ -31,10 +31,10 @@ and a second key encoding for no benefit, given that host keys are already
 Edwards points.
 """
 
-from .ed25519 import G, GE, Scalar
+from .ed25519 import GE, G, Scalar
 from .util import domain_hash
 
-__all__ = ["ecdh_ed25519", "TAG_ECDH"]
+__all__ = ["TAG_ECDH", "ecdh_ed25519"]
 
 # Verbatim from the spec. Note the space rather than a slash before "ecdh" --
 # inherited from the upstream tag name; harmless, but worth normalising if the

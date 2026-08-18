@@ -16,7 +16,7 @@ import os
 import unittest
 from random import randint, seed
 
-from ed25519lab.ed25519 import G, GE, Scalar
+from ed25519lab.ed25519 import GE, G, Scalar
 from ed25519lab.keys import pubkey_gen
 
 L = Scalar.SIZE
@@ -205,10 +205,9 @@ class ProtocolCrossCheck(unittest.TestCase):
 
     def test_ecdh_shared_point_matches_libsodium(self):
         """The KDF is ours, but the shared point underneath must be standard."""
-        from ed25519lab.ecdh import TAG_ECDH
+        from ed25519lab.ecdh import TAG_ECDH, ecdh_ed25519
         from ed25519lab.keys import pubkey_gen
         from ed25519lab.util import domain_hash
-        from ed25519lab.ecdh import ecdh_ed25519
 
         for _ in range(10):
             sk_a, sk_b = rand_scalar().to_bytes(), rand_scalar().to_bytes()
@@ -232,6 +231,7 @@ class ProtocolCrossCheck(unittest.TestCase):
         put to an independent implementation.
         """
         import nacl.exceptions
+
         from ed25519lab.internal_sig import TAG_CHALLENGE, internal_sign
         from ed25519lab.keys import pubkey_gen
 
@@ -240,10 +240,12 @@ class ProtocolCrossCheck(unittest.TestCase):
         msg = b"payload"
         sig = internal_sign(msg, sk)
         for candidate in (msg, TAG_CHALLENGE.encode() + msg, b""):
-            with self.subTest(msg=candidate[:16]):
-                # crypto_sign_open takes signature || message
-                with self.assertRaises(nacl.exceptions.BadSignatureError):
-                    sodium.crypto_sign_open(sig + candidate, pk)
+            # crypto_sign_open takes signature || message
+            with (
+                self.subTest(msg=candidate[:16]),
+                self.assertRaises(nacl.exceptions.BadSignatureError),
+            ):
+                sodium.crypto_sign_open(sig + candidate, pk)
 
 
 if __name__ == "__main__":
