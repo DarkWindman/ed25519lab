@@ -4,7 +4,7 @@ import hashlib
 import unittest
 from random import randint, seed
 
-from ed25519lab.ed25519 import FE, GE, G, Scalar
+from ed25519lab.ed25519 import FAST_B, FE, GE, B, FastGEMul, Scalar
 from ed25519lab.keys import pubkey_gen
 from ed25519lab.util import (
     bytes_from_int,
@@ -133,9 +133,9 @@ class ScalarTests(unittest.TestCase):
 
 class GroupElementTests(unittest.TestCase):
     def test_base_point(self):
-        self.assertEqual(G.to_bytes_compressed(), B_ENC)
-        self.assertEqual(int(G.y), int(FE(4) / FE(5)))
-        self.assertTrue(G.x.is_even())
+        self.assertEqual(B.to_bytes_compressed(), B_ENC)
+        self.assertEqual(int(B.y), int(FE(4) / FE(5)))
+        self.assertTrue(B.x.is_even())
 
     def test_neutral_element(self):
         self.assertTrue(GE().infinity)
@@ -156,22 +156,22 @@ class GroupElementTests(unittest.TestCase):
         seed(7)
         for _ in range(30):
             a, b = Scalar(randint(1, L - 1)), Scalar(randint(1, L - 1))
-            pa, pb = a * G, b * G
-            self.assertEqual(pa + pb, (a + b) * G)
+            pa, pb = a * B, b * B
+            self.assertEqual(pa + pb, (a + b) * B)
             self.assertEqual(pa - pa, GE())
-            self.assertEqual(-pa, (-a) * G)
-            self.assertEqual(b * pa, (a * b) * G)
+            self.assertEqual(-pa, (-a) * B)
+            self.assertEqual(b * pa, (a * b) * B)
 
     def test_order(self):
-        self.assertTrue((Scalar(0) * G).infinity)
-        self.assertTrue(G.in_prime_order_subgroup())
-        self.assertTrue((GE.ORDER * G).infinity)
+        self.assertTrue((Scalar(0) * B).infinity)
+        self.assertTrue(B.in_prime_order_subgroup())
+        self.assertTrue((GE.ORDER * B).infinity)
 
     def test_sum_with_arguments(self):
         # ChillDKG builds sum_coms with this; it was previously only tested
         # with zero arguments, so the loop body never ran.
         seed(15)
-        pts = [Scalar(randint(1, L - 1)) * G for _ in range(6)]
+        pts = [Scalar(randint(1, L - 1)) * B for _ in range(6)]
         expect = GE()
         for p in pts:
             expect = expect + p
@@ -181,7 +181,7 @@ class GroupElementTests(unittest.TestCase):
 
     def test_hash_and_str(self):
         seed(16)
-        p = Scalar(randint(1, L - 1)) * G
+        p = Scalar(randint(1, L - 1)) * B
         self.assertEqual(hash(p), hash(GE.from_bytes_compressed(p.to_bytes_compressed())))
         self.assertEqual({p, p}, {p})
         self.assertEqual(str(p), p.to_bytes_compressed().hex())
@@ -197,11 +197,11 @@ class GroupElementTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             FE.from_bytes_checked(b"\x00" * 31)
         with self.assertRaises(ValueError):
-            _mul_int(G, -1)          # negative scalar
+            _mul_int(B, -1)          # negative scalar
 
     def test_batch_mul(self):
         seed(8)
-        pairs = [(Scalar(randint(1, L - 1)), Scalar(randint(1, L - 1)) * G) for _ in range(5)]
+        pairs = [(Scalar(randint(1, L - 1)), Scalar(randint(1, L - 1)) * B) for _ in range(5)]
         expect = GE()
         for s, p in pairs:
             expect = expect + s * p
@@ -210,7 +210,7 @@ class GroupElementTests(unittest.TestCase):
     def test_encode_decode_roundtrip(self):
         seed(9)
         for _ in range(50):
-            p = Scalar(randint(1, L - 1)) * G
+            p = Scalar(randint(1, L - 1)) * B
             self.assertEqual(GE.from_bytes_compressed(p.to_bytes_compressed()), p)
 
     def test_off_curve_rejected(self):
@@ -218,12 +218,67 @@ class GroupElementTests(unittest.TestCase):
             GE(FE(1), FE(1))
 
 
+class FastGEMulTests(unittest.TestCase):
+    """k * B takes a precomputed-table path instead of double-and-add.
+
+    Two code paths for the same operation is the one real cost of the table, so
+    the equivalence is pinned rather than assumed: a divergence would only ever
+    show up for base-point multiplications, which is exactly the kind of bug
+    that hides.
+    """
+
+    def test_fast_g_agrees_with_the_generic_path(self):
+        from ed25519lab.ed25519 import _mul_int
+
+        seed(17)
+        edges = [0, 1, 2, 3, L - 2, L - 1] + [1 << i for i in (0, 1, 8, 127, 251)]
+        randoms = [randint(0, L - 1) for _ in range(150)]
+        for k in edges + randoms:
+            with self.subTest(k=hex(k)[:12]):
+                self.assertEqual(FAST_B.mul(k), _mul_int(B, k))
+
+    def test_the_operator_uses_the_table_and_still_agrees(self):
+        from ed25519lab.ed25519 import _mul_int
+
+        seed(18)
+        for _ in range(30):
+            k = Scalar(randint(1, L - 1))
+            self.assertEqual(k * B, _mul_int(B, int(k)))
+        # A point that merely equals B also takes the fast path; same answer.
+        g_copy = GE(B.x, B.y)
+        self.assertEqual(Scalar(7) * g_copy, _mul_int(B, 7))
+
+    def test_table_shape(self):
+        self.assertEqual(len(FAST_B.table), 256)
+        self.assertEqual(FAST_B.table[0], B)
+        for i in (1, 2, 3, 10):
+            with self.subTest(i=i):
+                self.assertEqual(FAST_B.table[i], (1 << i) * B)
+
+    def test_zero_and_negative(self):
+        self.assertTrue(FAST_B.mul(0).infinity)
+        self.assertTrue((Scalar(0) * B).infinity)
+        with self.assertRaises(ValueError):
+            FAST_B.mul(-1)
+
+    def test_table_for_a_non_generator_point(self):
+        from ed25519lab.ed25519 import _mul_int
+
+        seed(19)
+        p = Scalar(randint(1, L - 1)) * B
+        fast_p = FastGEMul(p)
+        for _ in range(10):
+            k = randint(0, L - 1)
+            with self.subTest(k=hex(k)[:12]):
+                self.assertEqual(fast_p.mul(k), _mul_int(p, k))
+
+
 class KeyTests(unittest.TestCase):
     def test_pubkey_gen(self):
         self.assertEqual(pubkey_gen(le(1)), B_ENC)
         seed(10)
         d = randint(1, L - 1)
-        self.assertEqual(pubkey_gen(le(d)), (Scalar(d) * G).to_bytes_compressed())
+        self.assertEqual(pubkey_gen(le(d)), (Scalar(d) * B).to_bytes_compressed())
 
     def test_pubkey_gen_rejects_bad_secrets(self):
         for bad in (le(0), le(L), le(L + 1), b"\x01" * 31):
@@ -287,7 +342,7 @@ class AdditionClosureTests(unittest.TestCase):
         from ed25519lab.ed25519 import _D
 
         seed(14)
-        pts = [Scalar(randint(1, L - 1)) * G for _ in range(6)]
+        pts = [Scalar(randint(1, L - 1)) * B for _ in range(6)]
         pts += [GE(), GE(FE(0), FE(-1))]  # neutral and the order-two point
         for a in pts:
             for b in pts:

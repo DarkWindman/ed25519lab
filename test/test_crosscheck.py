@@ -16,7 +16,7 @@ import os
 import unittest
 from random import randint, seed
 
-from ed25519lab.ed25519 import GE, G, Scalar
+from ed25519lab.ed25519 import GE, B, Scalar
 from ed25519lab.keys import pubkey_gen
 
 L = Scalar.SIZE
@@ -87,14 +87,14 @@ class LibsodiumCrossCheck(unittest.TestCase):
         for _ in range(30):
             a = rand_scalar()
             self.assertEqual(
-                (a * G).to_bytes_compressed(),
+                (a * B).to_bytes_compressed(),
                 sodium.crypto_scalarmult_ed25519_base_noclamp(a.to_bytes()),
             )
 
     def test_scalarmult_noclamp(self):
         for _ in range(30):
             a, b = rand_scalar(), rand_scalar()
-            p = a * G
+            p = a * B
             self.assertEqual(
                 (b * p).to_bytes_compressed(),
                 sodium.crypto_scalarmult_ed25519_noclamp(b.to_bytes(), p.to_bytes_compressed()),
@@ -102,14 +102,14 @@ class LibsodiumCrossCheck(unittest.TestCase):
 
     def test_point_add_and_sub(self):
         for _ in range(30):
-            p, q = rand_scalar() * G, rand_scalar() * G
+            p, q = rand_scalar() * B, rand_scalar() * B
             pb, qb = p.to_bytes_compressed(), q.to_bytes_compressed()
             self.assertEqual((p + q).to_bytes_compressed(), sodium.crypto_core_ed25519_add(pb, qb))
             self.assertEqual((p - q).to_bytes_compressed(), sodium.crypto_core_ed25519_sub(pb, qb))
 
     def test_negation(self):
         for _ in range(30):
-            p = rand_scalar() * G
+            p = rand_scalar() * B
             self.assertEqual(
                 (-p).to_bytes_compressed(),
                 sodium.crypto_core_ed25519_sub(
@@ -151,14 +151,14 @@ class LibsodiumCrossCheck(unittest.TestCase):
         from test.test_strictness import SMALL_ORDER, unchecked_decode
 
         for _ in range(30):
-            enc = (rand_scalar() * G).to_bytes_compressed()
+            enc = (rand_scalar() * B).to_bytes_compressed()
             self.assertTrue(sodium.crypto_core_ed25519_is_valid_point(enc))
             self.assertTrue(GE.from_bytes_compressed(enc).in_prime_order_subgroup())
 
         for name in ("order 2", "order 4 (a)", "order 8 (a)"):
             t = unchecked_decode(SMALL_ORDER[name])
             for _ in range(10):
-                enc = (rand_scalar() * G + t).to_bytes_compressed()
+                enc = (rand_scalar() * B + t).to_bytes_compressed()
                 with self.subTest(torsion=name):
                     self.assertFalse(sodium.crypto_core_ed25519_is_valid_point(enc))
                     with self.assertRaises(ValueError):
@@ -246,6 +246,46 @@ class ProtocolCrossCheck(unittest.TestCase):
                 self.assertRaises(nacl.exceptions.BadSignatureError),
             ):
                 sodium.crypto_sign_open(sig + candidate, pk)
+
+
+    def test_ed25519_verify_agrees_with_libsodium_on_honest_signatures(self):
+        """Signatures produced by libsodium must verify under our verifier."""
+        from ed25519lab.verify import ed25519_verify
+
+        for _ in range(20):
+            pk, sk = sodium.crypto_sign_keypair()
+            msg = bytes(randint(0, 255) for _ in range(randint(0, 64)))
+            sig = sodium.crypto_sign(msg, sk)[:64]
+            self.assertTrue(ed25519_verify(msg, pk, sig))
+            self.assertFalse(ed25519_verify(msg + b"x", pk, sig))
+
+    def test_KNOWN_DIVERGENCE_libsodium_accepts_a_mixed_order_pubkey(self):
+        """The concrete signature where we and a standard library disagree.
+
+        See test_verify.KnownDivergenceFromDalekTests for the construction. The
+        point of running it here is that the "other side" of the divergence is
+        an implementation we did not write: libsodium ACCEPTS this signature.
+
+        Note also that libsodium is internally inconsistent about it --
+        crypto_core_ed25519_is_valid_point rejects the same key that
+        crypto_sign_open accepts, because signature verification does not go
+        through the point-validation path.
+        """
+        import nacl.exceptions
+
+        from ed25519lab.verify import ed25519_verify
+        from test.test_verify import forge_mixed_order_pubkey
+
+        msg, pk_mixed, sig, *_ = forge_mixed_order_pubkey()
+
+        self.assertFalse(ed25519_verify(msg, pk_mixed, sig))
+        self.assertFalse(sodium.crypto_core_ed25519_is_valid_point(pk_mixed))
+        try:
+            sodium.crypto_sign_open(sig + msg, pk_mixed)
+            accepted = True
+        except nacl.exceptions.BadSignatureError:
+            accepted = False
+        self.assertTrue(accepted, "libsodium was expected to accept this signature")
 
 
 if __name__ == "__main__":

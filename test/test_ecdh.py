@@ -4,7 +4,7 @@ import unittest
 from random import randint, seed
 
 from ed25519lab.ecdh import ecdh_ed25519
-from ed25519lab.ed25519 import GE, G, Scalar
+from ed25519lab.ed25519 import GE, B, Scalar
 from ed25519lab.keys import pubkey_gen
 
 L = Scalar.SIZE
@@ -95,7 +95,7 @@ class EcdhStrictnessTests(unittest.TestCase):
         from test.test_strictness import SMALL_ORDER, unchecked_decode
 
         t = unchecked_decode(SMALL_ORDER["order 8 (a)"])
-        peer = (Scalar(randint(1, L - 1)) * G + t).to_bytes_compressed()
+        peer = (Scalar(randint(1, L - 1)) * B + t).to_bytes_compressed()
         with self.assertRaises(ValueError):
             ecdh_ed25519(self.sk, peer, self.ctx, sending=True)
 

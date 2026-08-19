@@ -18,7 +18,7 @@ from random import randint, seed
 sys.path.insert(0, str(Path(__file__).parent / "src/"))
 
 from ed25519lab.ecdh import ecdh_ed25519
-from ed25519lab.ed25519 import FE, GE, G, Scalar, _mul_int, _recover_x
+from ed25519lab.ed25519 import FE, GE, B, Scalar, _mul_int, _recover_x
 from ed25519lab.internal_sig import internal_sign, internal_verify
 from ed25519lab.keys import pubkey_gen
 from ed25519lab.util import domain_hash
@@ -55,7 +55,7 @@ def main() -> None:
     b = Scalar(randint(1, L - 1))
     fa = FE(randint(1, P - 1))
     fb = FE(randint(1, P - 1))
-    pt = a * G
+    pt = a * B
     enc = pt.to_bytes_compressed()
     y_only = FE(int(pt.y))
     wide = bytes(randint(0, 255) for _ in range(64))
@@ -78,8 +78,8 @@ def main() -> None:
     bench("group", "GE add", lambda: pt + pt)
     bench("group", "GE neg", lambda: -pt)
     bench("group", "GE eq", lambda: pt == pt)  # noqa: PLR0124 - measuring __eq__
-    bench("group", "GE scalar mul (252-bit)", lambda: a * G)
-    bench("group", "GE scalar mul (8-bit)", lambda: Scalar(200) * G)
+    bench("group", "GE scalar mul (252-bit)", lambda: a * B)
+    bench("group", "GE scalar mul (8-bit)", lambda: Scalar(200) * B)
     bench("group", "GE.sum of 10", lambda: GE.sum(*([pt] * 10)))
     bench("group", "GE.batch_mul of 10", lambda: GE.batch_mul(*([(a, pt)] * 10)))
 

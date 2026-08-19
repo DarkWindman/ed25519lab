@@ -39,7 +39,7 @@ signatures; the MPSW18 multi-party attack does not apply. `aux` is optional
 extra entropy.
 """
 
-from .ed25519 import GE, G, Scalar
+from .ed25519 import GE, B, Scalar
 from .util import domain_hash
 
 __all__ = ["TAG_CHALLENGE", "TAG_NONCE", "internal_sign", "internal_verify"]
@@ -71,13 +71,13 @@ def internal_sign(msg: bytes, seckey: bytes, aux: bytes = NO_AUX) -> bytes:
     if len(aux) != AUX_SIZE:
         raise ValueError(f"aux must be exactly {AUX_SIZE} bytes, got {len(aux)}")
     d = Scalar.from_bytes_nonzero_checked(seckey)
-    a = d * G
+    a = d * B
     assert not a.infinity
 
     k = Scalar.from_bytes_wide(domain_hash(TAG_NONCE, d.to_bytes(), aux, msg))
     if k == 0:
         raise RuntimeError("Failure. This happens only with negligible probability.")
-    r = k * G
+    r = k * B
     assert not r.infinity
 
     e = Scalar.from_bytes_wide(
@@ -124,4 +124,4 @@ def internal_verify(msg: bytes, pubkey: bytes, sig: bytes) -> bool:
         return False
 
     e = Scalar.from_bytes_wide(domain_hash(TAG_CHALLENGE, sig[0:32], pubkey, msg))
-    return s * G == r + e * a
+    return s * B == r + e * a

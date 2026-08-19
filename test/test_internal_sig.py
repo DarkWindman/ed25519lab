@@ -5,7 +5,7 @@ import unittest
 from random import randint, seed
 
 from ed25519lab.ecdh import TAG_ECDH
-from ed25519lab.ed25519 import GE, G, Scalar
+from ed25519lab.ed25519 import GE, B, Scalar
 from ed25519lab.internal_sig import (
     NO_AUX,
     TAG_CHALLENGE,
@@ -122,7 +122,7 @@ class NotAnEd25519SignatureTests(unittest.TestCase):
         a = GE.from_bytes_compressed(self.pk)
         s = Scalar.from_bytes_checked(self.sig[32:])
         e = Scalar.from_bytes_wide(hashlib.sha512(self.sig[:32] + self.pk + msg).digest())
-        return s * G == r + e * a
+        return s * B == r + e * a
 
     def test_does_not_verify_as_standard_ed25519(self):
         self.assertFalse(self._standard_ed25519_equation_holds(self.msg))

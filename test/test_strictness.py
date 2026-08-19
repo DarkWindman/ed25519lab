@@ -9,7 +9,7 @@ spec requires against dalek verify_strict and the ed25519-speccheck vectors.
 import unittest
 from random import randint, seed
 
-from ed25519lab.ed25519 import FE, GE, G, Scalar, _recover_x
+from ed25519lab.ed25519 import FE, GE, B, Scalar, _recover_x
 
 P = FE.SIZE
 L = Scalar.SIZE
@@ -27,10 +27,12 @@ SMALL_ORDER = {
     "order 8 (d)": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
 }
 
-# RFC 8032 section 7.1: public keys and signatures. Every A and every R must
-# survive strict decoding -- these are honest, real-world Ed25519 values.
+# RFC 8032 section 7.1: (message, public key, signature). Every A and every R
+# must survive strict decoding -- these are honest, real-world Ed25519 values --
+# and test_verify.py additionally checks that the signatures themselves verify.
 RFC_8032_7_1 = [
     (
+        "",
         "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
         (
             "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8"
@@ -38,6 +40,7 @@ RFC_8032_7_1 = [
         ),
     ),
     (
+        "72",
         "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
         (
             "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085a"
@@ -45,6 +48,7 @@ RFC_8032_7_1 = [
         ),
     ),
     (
+        "af82",
         "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025",
         (
             "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff"
@@ -52,6 +56,7 @@ RFC_8032_7_1 = [
         ),
     ),
     (
+        None,  # the 1023-byte message; not carried here, decode-only vector
         "278117fc144c72340f67d0f2316e8386ceffbf2b2428c9c51fef7c597f1d426e",
         (
             "0aab4c900501b3e24d7cdf4663326a3a87df5e4843b2cbdb67cbf6e460fec350aa53"
@@ -105,7 +110,7 @@ class MixedOrderTests(unittest.TestCase):
         for name in ("order 2", "order 4 (a)", "order 8 (a)"):
             t = unchecked_decode(SMALL_ORDER[name])
             for i in range(10):
-                p = Scalar(randint(1, L - 1)) * G + t
+                p = Scalar(randint(1, L - 1)) * B + t
                 with self.subTest(torsion=name, i=i), self.assertRaises(ValueError):
                     GE.from_bytes_compressed(p.to_bytes_compressed())
 
@@ -152,18 +157,18 @@ class CanonicalityTests(unittest.TestCase):
 
 class RFC8032Tests(unittest.TestCase):
     def test_public_keys_decode(self):
-        for pk, _ in RFC_8032_7_1:
+        for _, pk, _ in RFC_8032_7_1:
             with self.subTest(pk=pk[:16]):
                 a = GE.from_bytes_compressed(bytes.fromhex(pk))
                 self.assertFalse(a.infinity)
 
     def test_signature_r_components_decode(self):
-        for _, sig in RFC_8032_7_1:
+        for _, _, sig in RFC_8032_7_1:
             with self.subTest(sig=sig[:16]):
                 GE.from_bytes_compressed(bytes.fromhex(sig)[:32])
 
     def test_signature_s_components_are_valid_scalars(self):
-        for _, sig in RFC_8032_7_1:
+        for _, _, sig in RFC_8032_7_1:
             with self.subTest(sig=sig[:16]):
                 Scalar.from_bytes_checked(bytes.fromhex(sig)[32:])
 
@@ -181,22 +186,22 @@ class CofactorTests(unittest.TestCase):
     def setUp(self):
         seed(13)
         self.a = Scalar(randint(1, L - 1))
-        self.A = self.a * G
+        self.A = self.a * B
         self.r = Scalar(randint(1, L - 1))
-        self.R = self.r * G
+        self.R = self.r * B
         self.e = Scalar(randint(1, L - 1))
         self.s = self.r + self.e * self.a
 
     def test_honest_signature_satisfies_the_cofactorless_equation(self):
-        self.assertEqual(self.s * G, self.R + self.e * self.A)
+        self.assertEqual(self.s * B, self.R + self.e * self.A)
 
     def test_torsion_in_R_breaks_cofactorless_but_not_cofactored(self):
         for name in ("order 2", "order 4 (a)", "order 8 (a)"):
             with self.subTest(torsion=name):
                 t = unchecked_decode(SMALL_ORDER[name])
                 r_bad = self.R + t
-                self.assertNotEqual(self.s * G, r_bad + self.e * self.A)
-                self.assertEqual(8 * (self.s * G), 8 * r_bad + 8 * (self.e * self.A))
+                self.assertNotEqual(self.s * B, r_bad + self.e * self.A)
+                self.assertEqual(8 * (self.s * B), 8 * r_bad + 8 * (self.e * self.A))
 
     def test_strict_decode_rejects_the_tainted_R_anyway(self):
         # Belt and braces: even a cofactored verifier would never see it,

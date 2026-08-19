@@ -3,7 +3,7 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from .ed25519 import G, Scalar
+from .ed25519 import B, Scalar
 
 __all__ = ["pubkey_gen"]
 
@@ -20,6 +20,6 @@ def pubkey_gen(seckey: bytes) -> bytes:
     contrasted with x-only key generation, which does not exist here.
     """
     d = Scalar.from_bytes_nonzero_checked(seckey)
-    p = d * G
+    p = d * B
     assert not p.infinity
     return p.to_bytes_compressed()

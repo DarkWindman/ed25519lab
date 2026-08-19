@@ -31,7 +31,7 @@ and a second key encoding for no benefit, given that host keys are already
 Edwards points.
 """
 
-from .ed25519 import GE, G, Scalar
+from .ed25519 import GE, B, Scalar
 from .util import domain_hash
 
 __all__ = ["TAG_ECDH", "ecdh_ed25519"]
@@ -70,7 +70,7 @@ def ecdh_ed25519(seckey: bytes, pubkey: bytes, context: bytes, sending: bool) ->
     shared = d * peer
     assert not shared.infinity  # d != 0 and peer has prime order
 
-    own = (d * G).to_bytes_compressed()
+    own = (d * B).to_bytes_compressed()
     pk_sender, pk_recipient = (own, pubkey) if sending else (pubkey, own)
 
     return Scalar.from_bytes_wide(
