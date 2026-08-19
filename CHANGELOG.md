@@ -70,4 +70,10 @@ question needs solders / dalek.
   in: the docstrings already wrote equations as `[s]B == R + [e]A` while the code
   said `G`. The API mapping table has no row for the generator; it should.
 
+* Wycheproof's Ed25519 corpus (151 cases) is vendored under `test/vectors/` and
+  run against `ed25519_verify`. All 151 pass with no exceptions. The file's
+  SHA-256 and case count are pinned, and a test asserts that it still contains
+  no small-order or mixed-order cases -- the property that makes "zero
+  exceptions" the correct expectation rather than a coincidence.
+
 All rows of the spec's API mapping table are now implemented.

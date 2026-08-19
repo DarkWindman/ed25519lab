@@ -92,7 +92,7 @@ Testing
 No installation needed -- `test/__init__.py` puts `src/` on the path, so a fresh
 clone runs as is.
 
-    python3 -m unittest                            # all 106
+    python3 -m unittest                            # all 112
     python3 -m unittest test.test_strictness -v    # one module, verbose
 
 `test_ed25519.py` covers arithmetic and constructors, `test_strictness.py`
@@ -108,6 +108,13 @@ against something we did not write, so a silent skip is dangerous in CI: set
     ED25519LAB_REQUIRE_CROSSCHECK=1 python3 -m unittest
 
 to turn the skip into a hard failure. CI sets it.
+
+`test_wycheproof.py` runs Google's Wycheproof Ed25519 corpus -- 151 cases of
+malformed, truncated and malleable signatures, vendored verbatim under
+`test/vectors/` with its SHA-256 pinned. It is parser breadth, not policy: the
+file contains no small-order or mixed-order cases, so it cannot distinguish a
+permissive verifier from a strict one, and there are consequently zero
+exceptions and no allow-list.
 
 RFC 8032 section 7.1 vectors serve two purposes: every public key and every
 signature R must survive strict decoding, and the signatures themselves must
