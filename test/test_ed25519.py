@@ -289,10 +289,11 @@ class KeyTests(unittest.TestCase):
 
 
 class UtilTests(unittest.TestCase):
+
     def test_tagged_hash_digests_the_tag_to_a_fixed_width(self):
         self.assertEqual(
             tagged_hash("proto-v1/nonce", b"\x01\x02", b"\x03"),
-            hashlib.sha512(hashlib.sha256(b"proto-v1/nonce").digest() + b"\x01\x02\x03").digest(),
+            hashlib.sha512(hashlib.sha512(b"proto-v1/nonce").digest() + b"\x01\x02\x03").digest(),
         )
 
     def test_tagged_hash_is_not_the_plain_prefix_construction(self):
@@ -305,22 +306,23 @@ class UtilTests(unittest.TestCase):
     def test_tagged_hash_is_not_bip340s_double_tag(self):
         # BIP340 hashes the tag twice to fill SHA-256's 64-byte block. SHA-512
         # has a 128-byte block, so the second copy earns nothing and is dropped.
-        t = hashlib.sha256(b"proto-v1/nonce").digest()
+        # (BIP340 also uses SHA-256 for the tag; we keep one hash function.)
+        t = hashlib.sha512(b"proto-v1/nonce").digest()
         self.assertNotEqual(
             tagged_hash("proto-v1/nonce", b"\x01"),
             hashlib.sha512(t + t + b"\x01").digest(),
         )
 
-    def test_domain_hash_output_is_64_bytes_and_feeds_from_bytes_wide(self):
+    def test_tagged_hash_output_is_64_bytes_and_feeds_from_bytes_wide(self):
         h = tagged_hash("proto-v1/challenge", b"\x00" * 32)
         self.assertEqual(len(h), 64)
         self.assertLess(int(Scalar.from_bytes_wide(h)), L)
 
-    def test_domain_hash_separates_tags(self):
+    def test_tagged_hash_separates_tags(self):
         self.assertNotEqual(tagged_hash("a", b"x"), tagged_hash("b", b"x"))
         self.assertEqual(tagged_hash("a", b"x"), tagged_hash("a", b"x"))
 
-    def test_domain_hash_parts_join_like_concatenation(self):
+    def test_tagged_hash_parts_join_like_concatenation(self):
         self.assertEqual(tagged_hash("t", b"ab", b"cd"), tagged_hash("t", b"abcd"))
         self.assertEqual(tagged_hash("t"), tagged_hash("t", b""))
 
@@ -333,8 +335,8 @@ class UtilTests(unittest.TestCase):
         """The whole reason the tag is digested rather than prepended.
 
         Under SHA-512(tag || data) these two are byte-identical inputs. Under
-        SHA-512(SHA-256(tag) || data) they cannot be: the tag always occupies
-        exactly 32 bytes, so the data always starts at the same offset.
+        SHA-512(SHA-512(tag) || data) they cannot be: the tag always occupies
+        exactly 64 bytes, so the data always starts at the same offset.
         """
         self.assertNotEqual(tagged_hash("ab", b"c"), tagged_hash("abc", b""))
         self.assertNotEqual(

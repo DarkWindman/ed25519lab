@@ -1,4 +1,4 @@
-rm ed25519lab
+ed25519lab
 ==========
 
 ![Dependencies: None](https://img.shields.io/badge/dependencies-none-success)
@@ -54,14 +54,16 @@ These are deliberate and are what the library exists for.
   about 1 time in 16. Reducing a hash the wrong way therefore fails late and
   intermittently. The distinct name plus the length check make it fail
   immediately, at the call site.
-* **`tagged_hash` digests the tag.** `SHA-512(SHA-256(tag) || parts...)`. The
+* **`tagged_hash` digests the tag.** `SHA-512(SHA-512(tag) || parts...)`. The
   obvious alternative, a plain `SHA-512(tag || data)` prefix, lets one tag be a
   prefix of another and then the two domains collide outright -- `"p/nonce"`
   with data `"coef..."` is byte-identical to `"p/noncecoef"` with data `"..."`.
-  A fixed-width tag makes that impossible rather than merely unlikely. BIP340
-  hashes the tag twice to fill SHA-256's 64-byte block; SHA-512's block is 128
-  bytes, so the second copy earns nothing and is dropped. The 64-byte output
-  feeds `Scalar.from_bytes_wide` with no length adapter. One caller obligation
+  A fixed-width tag makes that impossible rather than merely unlikely. Two
+  deliberate departures from BIP340: it hashes the tag twice to fill SHA-256's
+  64-byte block, which SHA-512's 128-byte block makes pointless, and it digests
+  the tag with SHA-256 where this library uses SHA-512 so that only one hash
+  function is needed anywhere. The 64-byte output feeds
+  `Scalar.from_bytes_wide` with no length adapter. One caller obligation
   remains: at most one part may be variable-length, and it must be last.
 * **The generator is named `B`, not `G`.** This is the one place the library
   deviates from the "keep the upstream name" policy, and it does so to follow
@@ -96,7 +98,7 @@ Testing
 No installation needed -- `test/__init__.py` puts `src/` on the path, so a fresh
 clone runs as is.
 
-    python3 -m unittest                            # all 116
+    python3 -m unittest                            # all 119
     python3 -m unittest test.test_strictness -v    # one module, verbose
 
 `test_ed25519.py` covers arithmetic and constructors, `test_strictness.py`

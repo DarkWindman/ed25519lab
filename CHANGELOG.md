@@ -12,14 +12,15 @@ Initial curve and scalar layer.
   takes exactly 64 bytes, and is the only supported way to turn a hash output
   into a scalar.
 * `pubkey_gen` uses raw scalars: no seed, no clamping.
-* `tagged_hash(tag, *parts)` is `SHA-512(SHA-256(tag) || parts...)`. Digesting
-  the tag to a fixed 32 bytes makes tag-prefix collisions impossible by
+* `tagged_hash(tag, *parts)` is `SHA-512(SHA-512(tag) || parts...)`. Digesting
+  the tag to a fixed 64 bytes makes tag-prefix collisions impossible by
   construction: with a plain `SHA-512(tag || data)` prefix, `"p/nonce"` with
   data `"coef..."` and `"p/noncecoef"` with data `"..."` hash identical inputs,
-  and nothing but manual vigilance catches it. This is BIP340's approach with
-  the widths adjusted -- BIP340 hashes the tag twice to fill SHA-256's 64-byte
-  block, which SHA-512's 128-byte block makes pointless, so the second copy is
-  dropped. The caller's remaining obligation is unchanged: at most one part may
+  and nothing but manual vigilance catches it. This is BIP340's approach with the widths
+  adjusted: BIP340 hashes the tag twice to fill SHA-256's 64-byte block, which
+  SHA-512's 128-byte block makes pointless, and it digests the tag with SHA-256
+  where this library uses SHA-512 so that only one hash function is needed
+  anywhere. The caller's remaining obligation is unchanged: at most one part may
   be variable-length and it must be last.
 * `GE.from_bytes_compressed` now REJECTS the identity, and
   `GE.from_bytes_compressed_with_identity` is the variant that accepts it, for

@@ -24,7 +24,7 @@ __all__ = [
 def tagged_hash(tag: str, *parts: bytes) -> bytes:
     """Domain-separated hash. 64 bytes.
 
-        tagged_hash(tag, *parts) == SHA-512(SHA-256(tag) || parts...)
+        tagged_hash(tag, *parts) == SHA-512(SHA-512(tag) || parts...)
 
     THE TAG IS DIGESTED TO A FIXED WIDTH, ON PURPOSE.
 
@@ -36,13 +36,20 @@ def tagged_hash(tag: str, *parts: bytes) -> bytes:
     tag is added, forever.
 
     Hashing the tag first makes that impossible by construction. Every tag
-    becomes exactly 32 bytes, so the data always begins at offset 32 and no tag
+    becomes exactly 64 bytes, so the data always begins at offset 64 and no tag
     can be a prefix of another. The cost is one extra hash per call.
 
-    This is BIP340's approach with the widths adjusted. BIP340 hashes the tag
-    TWICE, which is a SHA-256 midstate optimisation: 2 x 32 bytes exactly fills
-    its 64-byte block. SHA-512 has a 128-byte block, so the trick buys nothing
-    here and the second copy is dropped.
+    This is BIP340's approach with the widths adjusted. Two differences, both
+    deliberate:
+
+    * BIP340 hashes the tag TWICE. That is a SHA-256 midstate optimisation --
+      2 x 32 bytes exactly fills its 64-byte block. SHA-512's block is 128
+      bytes, so the trick buys nothing here and the second copy is dropped.
+    * The tag is digested with SHA-512, not SHA-256. Any fixed width closes the
+      prefix hazard equally well, so the deciding argument is that the library
+      then uses exactly one hash function everywhere. A second primitive in a
+      reference implementation is one more thing to specify, port and get
+      wrong, for no gain.
 
     WHAT THE CALLER STILL HAS TO GUARANTEE
 
@@ -61,7 +68,7 @@ def tagged_hash(tag: str, *parts: bytes) -> bytes:
     `Scalar.from_bytes_wide(tagged_hash(...))` composes without a length
     adapter, and no other length can be passed by accident.
     """
-    return hashlib.sha512(hashlib.sha256(tag.encode()).digest() + b"".join(parts)).digest()
+    return hashlib.sha512(hashlib.sha512(tag.encode()).digest() + b"".join(parts)).digest()
 
 
 def bytes_from_int(x: int) -> bytes:

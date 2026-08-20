@@ -14,6 +14,7 @@ from ed25519lab.internal_sig import (
     internal_verify,
 )
 from ed25519lab.keys import pubkey_gen
+from ed25519lab.util import tagged_hash
 
 L = Scalar.SIZE
 
@@ -140,19 +141,48 @@ class NotAnEd25519SignatureTests(unittest.TestCase):
         self.assertNotEqual(standard, ours)
 
 
-class TagHygieneTests(unittest.TestCase):
-    """tagged_hash uses a plain prefix, so tag prefix-freeness is a caller
-    obligation. This checks every tag the library defines, and will fail the
-    moment someone adds a colliding one."""
+class TagSeparationTests(unittest.TestCase):
+    """Tag separation is structural, not a caller obligation.
 
-    def test_no_tag_is_a_prefix_of_another(self):
-        tags = [TAG_NONCE, TAG_CHALLENGE, TAG_ECDH]
-        self.assertEqual(len(tags), len(set(tags)))
-        for a in tags:
-            for b in tags:
-                if a is not b:
-                    with self.subTest(a=a, b=b):
-                        self.assertFalse(b.startswith(a))
+    tagged_hash digests the tag to a fixed 64 bytes, so one tag being a prefix
+    of another cannot collide the domains.
+
+    Two different jobs. The adversarial-shape test constructs a prefixing pair
+    itself and so actually exercises the property today; swapping the
+    construction back to a plain prefix fails it. The real-tag test is a forward
+    guard: no current tag prefixes another, so its prefix branch is dormant and
+    it would pass under either construction -- it starts biting the day someone
+    adds a tag like "<existing>coef".
+    """
+
+    TAGS = (TAG_NONCE, TAG_CHALLENGE, TAG_ECDH)
+
+    def test_tags_are_distinct(self):
+        self.assertEqual(len(self.TAGS), len(set(self.TAGS)))
+
+    def test_real_tags_never_collide_whatever_the_data(self):
+        for a in self.TAGS:
+            for b in self.TAGS:
+                if a is b:
+                    continue
+                with self.subTest(a=a, b=b):
+                    # If b == a + suffix, a plain-prefix construction would make
+                    # these two calls byte-identical. Here they must not be.
+                    suffix = b[len(a) :].encode() if b.startswith(a) else b"\x00"
+                    self.assertNotEqual(
+                        tagged_hash(a, suffix + b"payload"),
+                        tagged_hash(b, b"payload"),
+                    )
+
+    def test_a_prefixing_tag_pair_is_harmless_by_construction(self):
+        # The exact shape found in the FROST reference: "/nonce" is a prefix of
+        # "/noncecoef". Under SHA-512(tag || data) these collide outright.
+        self.assertNotEqual(
+            tagged_hash("p/nonce", b"coef" + b"D"),
+            tagged_hash("p/noncecoef", b"D"),
+        )
+        self.assertNotEqual(tagged_hash("ab", b"c"), tagged_hash("abc", b""))
+        self.assertNotEqual(tagged_hash("", b"x"), tagged_hash("x", b""))
 
 
 if __name__ == "__main__":
