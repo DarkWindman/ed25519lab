@@ -141,7 +141,7 @@ class NotAnEd25519SignatureTests(unittest.TestCase):
 
 
 class TagHygieneTests(unittest.TestCase):
-    """domain_hash uses a plain prefix, so tag prefix-freeness is a caller
+    """tagged_hash uses a plain prefix, so tag prefix-freeness is a caller
     obligation. This checks every tag the library defines, and will fail the
     moment someone adds a colliding one."""
 

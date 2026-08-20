@@ -12,13 +12,24 @@ Initial curve and scalar layer.
   takes exactly 64 bytes, and is the only supported way to turn a hash output
   into a scalar.
 * `pubkey_gen` uses raw scalars: no seed, no clamping.
-* `domain_hash(tag, *parts)` replaces secp256k1lab's `tagged_hash`. The BIP340
-  double-hash construction is dropped: this is Ed25519, and every construction
-  in the spec uses a plain SHA-512 tag prefix. The rename is deliberate --
-  `tagged_hash` names the BIP340 construction specifically. The 64-byte output
-  feeds `Scalar.from_bytes_wide` directly. Callers must ensure no tag prefixes
-  another and that at most one part is variable-length and last; both hazards
-  are pinned by tests.
+* `tagged_hash(tag, *parts)` is `SHA-512(SHA-256(tag) || parts...)`. Digesting
+  the tag to a fixed 32 bytes makes tag-prefix collisions impossible by
+  construction: with a plain `SHA-512(tag || data)` prefix, `"p/nonce"` with
+  data `"coef..."` and `"p/noncecoef"` with data `"..."` hash identical inputs,
+  and nothing but manual vigilance catches it. This is BIP340's approach with
+  the widths adjusted -- BIP340 hashes the tag twice to fill SHA-256's 64-byte
+  block, which SHA-512's 128-byte block makes pointless, so the second copy is
+  dropped. The caller's remaining obligation is unchanged: at most one part may
+  be variable-length and it must be last.
+* `GE.from_bytes_compressed` now REJECTS the identity, and
+  `GE.from_bytes_compressed_with_identity` is the variant that accepts it, for
+  the call sites where the identity is a real protocol value -- an aggregate
+  nonce whose contributions cancel, a sum of VSS commitments. This reverses the
+  earlier "delete the variant, check `.infinity` per call site" design. The
+  failure modes are not symmetric: a forgotten `.infinity` check accepts a value
+  that should have been refused and does so SILENTLY, while a forgotten
+  `_with_identity` raises at the one site that needed it. Strict by default puts
+  the quiet mistake out of reach.
 
 * `internal_sign` / `internal_verify` in `ed25519lab.internal_sig`, replacing
   secp256k1lab's `schnorr_sign` / `schnorr_verify`. The domain tag is prepended

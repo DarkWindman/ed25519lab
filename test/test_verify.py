@@ -118,7 +118,10 @@ class StrictnessTests(unittest.TestCase):
 
     def test_neutral_element_is_rejected_explicitly(self):
         neutral = GE().to_bytes_compressed()
-        self.assertTrue(GE.from_bytes_compressed(neutral).infinity)  # survives decode
+        # Refused by the strict decoder itself, not by a separate check.
+        with self.assertRaises(ValueError):
+            GE.from_bytes_compressed(neutral)
+        self.assertTrue(GE.from_bytes_compressed_with_identity(neutral).infinity)
         self.assertFalse(ed25519_verify(self.msg, neutral, self.sig))
         self.assertFalse(ed25519_verify(self.msg, self.pk, neutral + self.sig[32:]))
 

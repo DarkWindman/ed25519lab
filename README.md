@@ -1,4 +1,4 @@
-ed25519lab
+rm ed25519lab
 ==========
 
 ![Dependencies: None](https://img.shields.io/badge/dependencies-none-success)
@@ -54,16 +54,15 @@ These are deliberate and are what the library exists for.
   about 1 time in 16. Reducing a hash the wrong way therefore fails late and
   intermittently. The distinct name plus the length check make it fail
   immediately, at the call site.
-* **`domain_hash` instead of `tagged_hash`.** Domain separation is a plain
-  SHA-512 tag prefix, `SHA-512(tag || parts...)`, matching how every
-  construction in the protocol spec is written. BIP340's double-hash
-  `H(H(tag) || H(tag) || msg)` is dropped along with the rest of the BIP340
-  machinery, and the function is renamed rather than redefined because
-  `tagged_hash` names that specific construction. The 64-byte output feeds
-  `Scalar.from_bytes_wide` with no length adapter. The trade-off is that
-  concatenation is no longer injective for free: callers must ensure no tag is a
-  prefix of another, and that at most one part is variable-length and comes
-  last. Both hazards are pinned by tests.
+* **`tagged_hash` digests the tag.** `SHA-512(SHA-256(tag) || parts...)`. The
+  obvious alternative, a plain `SHA-512(tag || data)` prefix, lets one tag be a
+  prefix of another and then the two domains collide outright -- `"p/nonce"`
+  with data `"coef..."` is byte-identical to `"p/noncecoef"` with data `"..."`.
+  A fixed-width tag makes that impossible rather than merely unlikely. BIP340
+  hashes the tag twice to fill SHA-256's 64-byte block; SHA-512's block is 128
+  bytes, so the second copy earns nothing and is dropped. The 64-byte output
+  feeds `Scalar.from_bytes_wide` with no length adapter. One caller obligation
+  remains: at most one part may be variable-length, and it must be last.
 * **The generator is named `B`, not `G`.** This is the one place the library
   deviates from the "keep the upstream name" policy, and it does so to follow
   the document it implements: the spec is written in RFC 8032 notation
@@ -72,11 +71,16 @@ These are deliberate and are what the library exists for.
   FROST's binding factor is a lowercase `b`, so expressions like
   `[s]B = R1 + [b]R2` mix the two; that is inherited from the FROST literature,
   not a typo.
-* **The neutral element is an ordinary point.** `GE()` is `(0, 1)` and encodes
-  as `0x01` followed by 31 zero bytes. There is no
-  `from_bytes_compressed_with_infinity` or `to_bytes_compressed_with_infinity`;
-  call sites that must not accept the neutral element check `.infinity`
-  themselves.
+* **The identity is an ordinary point, and the decoder is strict by default.**
+  `GE()` is `(0, 1)` and encodes as `0x01` followed by 31 zero bytes -- no
+  sentinel. `GE.from_bytes_compressed` refuses it, because most wire values
+  (public keys, public shares, individual public nonces) can never legitimately
+  be the identity. Where it IS a real value -- an aggregate nonce whose
+  contributions cancel, a sum of VSS commitments -- use
+  `GE.from_bytes_compressed_with_identity`, which is the same decoder minus that
+  one rejection. Strict by default because the mistakes are asymmetric: a
+  forgotten `.infinity` check fails silently, a forgotten `_with_identity`
+  raises.
 
 Endianness
 ----------
@@ -92,7 +96,7 @@ Testing
 No installation needed -- `test/__init__.py` puts `src/` on the path, so a fresh
 clone runs as is.
 
-    python3 -m unittest                            # all 112
+    python3 -m unittest                            # all 116
     python3 -m unittest test.test_strictness -v    # one module, verbose
 
 `test_ed25519.py` covers arithmetic and constructors, `test_strictness.py`

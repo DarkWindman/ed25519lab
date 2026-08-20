@@ -14,48 +14,54 @@ import hashlib
 
 __all__ = [
     "bytes_from_int",
-    "domain_hash",
     "hash_sha512",
     "int_from_bytes",
+    "tagged_hash",
     "xor_bytes",
 ]
 
 
-def domain_hash(tag: str, *parts: bytes) -> bytes:
-    """SHA-512 over a domain tag followed by the concatenated parts. 64 bytes.
+def tagged_hash(tag: str, *parts: bytes) -> bytes:
+    """Domain-separated hash. 64 bytes.
 
-        domain_hash("proto-v1/nonce", d_le, aux, m)
-            == SHA-512(b"proto-v1/nonce" || d_le || aux || m)
+        tagged_hash(tag, *parts) == SHA-512(SHA-256(tag) || parts...)
 
-    This REPLACES secp256k1lab's tagged_hash, which is the BIP340 construction
-    H(H(tag) || H(tag) || msg). That name is a term of art for that specific
-    construction, so reusing it for a different one would be a trap; the
-    function is renamed rather than redefined.
+    THE TAG IS DIGESTED TO A FIXED WIDTH, ON PURPOSE.
 
-    The 64-byte output is deliberate: it is exactly what Scalar.from_bytes_wide
-    requires, so `Scalar.from_bytes_wide(domain_hash(...))` composes without a
-    length adapter, and no other length can be passed by accident.
+    The obvious construction, SHA-512(tag || data), is a trap: with a plain
+    string prefix, one tag can be a prefix of another, and then the two domains
+    collide outright. "proto/nonce" with data "coef..." and "proto/noncecoef"
+    with data "..." hash the same bytes. Nothing in the code catches it; the
+    only defence is remembering to check prefix-freeness by hand every time a
+    tag is added, forever.
 
-    CONCATENATION IS NOT INJECTIVE -- read this before adding a call site.
+    Hashing the tag first makes that impossible by construction. Every tag
+    becomes exactly 32 bytes, so the data always begins at offset 32 and no tag
+    can be a prefix of another. The cost is one extra hash per call.
 
-    A plain tag prefix does not, by itself, make the input unambiguous the way
-    BIP340's fixed 64-byte prefix does. Two guarantees have to be provided by
-    the CALLER instead of by this function:
+    This is BIP340's approach with the widths adjusted. BIP340 hashes the tag
+    TWICE, which is a SHA-256 midstate optimisation: 2 x 32 bytes exactly fills
+    its 64-byte block. SHA-512 has a 128-byte block, so the trick buys nothing
+    here and the second copy is dropped.
 
-    1. No tag may be a prefix of another tag. Check this by hand whenever a tag
-       is added; nothing here enforces it.
+    WHAT THE CALLER STILL HAS TO GUARANTEE
 
-    2. At most one part may be variable-length, and it must be last. Otherwise
-       distinct inputs collide: with parts (aux, m), the pairs (b"ab", b"cd")
-       and (b"a", b"bcd") produce identical hashes.
+    Fixing the tag width removes the tag-prefix hazard. It does NOT make the
+    concatenation of `parts` injective. At most one part may be
+    variable-length, and it must be last -- otherwise (b"ab", b"cd") and
+    (b"a", b"bcd") still produce the same hash. For anything else, length-prefix
+    each variable field.
 
-    Guarantee 2 is not academic for a signature nonce. If k = domain_hash(tag,
-    d, aux, m) collides for two different messages, the signer produces the same
-    R twice with different challenges, and the private key falls out of
-    d = (s1 - s2) / (e1 - e2). Fix every variable-length field except the last
-    one -- hash it to 32 bytes, or length-prefix it.
+    That matters most for a signature nonce. If k = tagged_hash(tag, d, aux, m)
+    collides for two different messages, the signer emits the same R twice under
+    different challenges and the secret key falls out of
+    d = (s1 - s2) / (e1 - e2).
+
+    The 64-byte output is exactly what Scalar.from_bytes_wide requires, so
+    `Scalar.from_bytes_wide(tagged_hash(...))` composes without a length
+    adapter, and no other length can be passed by accident.
     """
-    return hashlib.sha512(tag.encode() + b"".join(parts)).digest()
+    return hashlib.sha512(hashlib.sha256(tag.encode()).digest() + b"".join(parts)).digest()
 
 
 def bytes_from_int(x: int) -> bytes:
@@ -72,4 +78,10 @@ def xor_bytes(b0: bytes, b1: bytes) -> bytes:
 
 
 def hash_sha512(b: bytes) -> bytes:
+    """Plain SHA-512, untagged.
+
+    For the one place that must match RFC 8032 / Solana byte for byte: the
+    standard Ed25519 challenge e = SHA-512(R || A || m). Everything else that
+    hashes to a scalar goes through tagged_hash.
+    """
     return hashlib.sha512(b).digest()

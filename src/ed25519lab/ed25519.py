@@ -403,21 +403,24 @@ class GE:
         return bytes(b)
 
     @staticmethod
-    def from_bytes_compressed(b: bytes) -> GE:
-        """Strictly decode 32 bytes. RFC 8032 section 5.1.3 plus a subgroup check.
+    def from_bytes_compressed_with_identity(b: bytes) -> GE:
+        """Strictly decode 32 bytes, ALLOWING the identity.
 
+        RFC 8032 section 5.1.3 decoding plus a prime-order-subgroup check.
         Rejects, in this order:
           - wrong length
           - non-canonical y (y >= p)
           - y for which no x exists on the curve
-          - x == 0 with the sign bit set (non-canonical neutral encoding)
-          - any point outside the prime-order subgroup, that is every
-            small-order point and every mixed-order point [k]B + T
+          - x == 0 with the sign bit set (non-canonical identity encoding)
+          - any point outside the prime-order subgroup: every small-order point
+            and every mixed-order point [k]B + T
 
-        The neutral element IS accepted; it is a legitimate element of the
-        prime-order subgroup. Call sites that must not accept it check
-        .infinity explicitly. There is deliberately no
-        from_bytes_compressed_with_infinity to hide that decision in.
+        The identity survives, because it is a legitimate element of the
+        prime-order subgroup and some wire values legitimately are it: an
+        aggregate nonce whose components cancel, or a sum of VSS commitments.
+
+        Use this ONLY where the identity is a valid protocol value. Everywhere
+        else use from_bytes_compressed, which is this plus a rejection.
         """
         if len(b) != 32:
             raise ValueError(f"expected 32 bytes, got {len(b)}")
@@ -433,6 +436,28 @@ class GE:
         p = GE(x, FE(y))
         if not p.in_prime_order_subgroup():
             raise ValueError("point is not in the prime-order subgroup")
+        return p
+
+    @staticmethod
+    def from_bytes_compressed(b: bytes) -> GE:
+        """Strictly decode 32 bytes, REJECTING the identity.
+
+        Everything from_bytes_compressed_with_identity rejects, plus the
+        identity itself. This is the default because most wire values -- public
+        keys, public shares, individual public nonces -- can never legitimately
+        be the identity, and an identity there means a broken or hostile peer.
+
+        WHY THIS IS THE DEFAULT AND NOT THE OTHER WAY AROUND. The alternative
+        design is a single permissive decoder plus an explicit `.infinity` check
+        at each call site. The failure modes are not symmetric: forgetting the
+        `.infinity` check fails SILENTLY and accepts a value that should have
+        been refused, whereas forgetting to reach for the _with_identity variant
+        fails LOUDLY with an exception at the one call site that needed it. The
+        strict default puts the quiet mistake out of reach.
+        """
+        p = GE.from_bytes_compressed_with_identity(b)
+        if p.infinity:
+            raise ValueError("point is the identity")
         return p
 
     # -- subgroup -----------------------------------------------------------

@@ -32,7 +32,7 @@ Edwards points.
 """
 
 from .ed25519 import GE, B, Scalar
-from .util import domain_hash
+from .util import tagged_hash
 
 __all__ = ["TAG_ECDH", "ecdh_ed25519"]
 
@@ -60,12 +60,12 @@ def ecdh_ed25519(seckey: bytes, pubkey: bytes, context: bytes, sending: bool) ->
 
     The concatenation is unambiguous: the shared point and both public keys are
     32 bytes each, and `context` is the only variable-length part and comes
-    last. See domain_hash for why that matters.
+    last. See tagged_hash for why that matters.
     """
     d = Scalar.from_bytes_nonzero_checked(seckey)
+    # from_bytes_compressed refuses the identity as well as small- and
+    # mixed-order points, which is exactly this call site's policy.
     peer = GE.from_bytes_compressed(pubkey)
-    if peer.infinity:
-        raise ValueError("peer public key is the neutral element")
 
     shared = d * peer
     assert not shared.infinity  # d != 0 and peer has prime order
@@ -74,7 +74,7 @@ def ecdh_ed25519(seckey: bytes, pubkey: bytes, context: bytes, sending: bool) ->
     pk_sender, pk_recipient = (own, pubkey) if sending else (pubkey, own)
 
     return Scalar.from_bytes_wide(
-        domain_hash(
+        tagged_hash(
             TAG_ECDH,
             shared.to_bytes_compressed(),
             pk_sender,

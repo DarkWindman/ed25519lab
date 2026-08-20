@@ -83,8 +83,11 @@ def unchecked_decode(h: str) -> GE:
 
 
 class SmallOrderTests(unittest.TestCase):
-    def test_neutral_is_accepted(self):
-        self.assertTrue(GE.from_bytes_compressed(bytes.fromhex(SMALL_ORDER["order 1 (neutral)"])).infinity)
+    def test_neutral_is_accepted_only_by_the_with_identity_decoder(self):
+        enc = bytes.fromhex(SMALL_ORDER["order 1 (neutral)"])
+        self.assertTrue(GE.from_bytes_compressed_with_identity(enc).infinity)
+        with self.assertRaises(ValueError):
+            GE.from_bytes_compressed(enc)
 
     def test_all_other_small_order_points_are_rejected(self):
         for name, h in SMALL_ORDER.items():
@@ -99,6 +102,58 @@ class SmallOrderTests(unittest.TestCase):
                 t = unchecked_decode(h)
                 self.assertTrue((8 * t).infinity)
                 self.assertFalse(t.in_prime_order_subgroup() and not t.infinity)
+
+
+class TwoDecodersTests(unittest.TestCase):
+    """from_bytes_compressed is from_bytes_compressed_with_identity plus one
+    rejection. This pins that they differ on the identity and NOWHERE else --
+    if the strict variant ever grew an extra rule, or the permissive one lost
+    the subgroup check, this fails."""
+
+    def _both(self, enc):
+        def run(fn):
+            try:
+                return ("ok", fn(enc).infinity)
+            except ValueError:
+                return ("raise", None)
+        return run(GE.from_bytes_compressed_with_identity), run(GE.from_bytes_compressed)
+
+    def test_they_agree_on_everything_except_the_identity(self):
+        seed(20)
+        cases = [(Scalar(randint(1, L - 1)) * B).to_bytes_compressed() for _ in range(20)]
+        # every small-order encoding EXCEPT the identity, which is the one
+        # input the two decoders are supposed to disagree on
+        cases += [
+            bytes.fromhex(h)
+            for name, h in SMALL_ORDER.items()
+            if name != "order 1 (neutral)"
+        ]
+        cases += [(P + i).to_bytes(32, "little") for i in range(3)]
+        cases += [b"", b"\x01" * 31, b"\x01" * 33]
+        t = unchecked_decode(SMALL_ORDER["order 8 (a)"])
+        cases += [(Scalar(randint(1, L - 1)) * B + t).to_bytes_compressed() for _ in range(5)]
+        neutral = GE().to_bytes_compressed()
+
+        differed = []
+        for enc in cases:
+            lax, strict = self._both(enc)
+            if lax != strict:
+                differed.append(enc)
+        self.assertEqual(differed, [], "the two decoders differ on a non-identity input")
+
+        # ...and they DO differ on the identity.
+        lax, strict = self._both(neutral)
+        self.assertEqual(lax, ("ok", True))
+        self.assertEqual(strict, ("raise", None))
+
+    def test_the_permissive_decoder_is_still_strict_about_everything_else(self):
+        for name, h in SMALL_ORDER.items():
+            if name == "order 1 (neutral)":
+                continue
+            with self.subTest(point=name), self.assertRaises(ValueError):
+                GE.from_bytes_compressed_with_identity(bytes.fromhex(h))
+        with self.assertRaises(ValueError):
+            GE.from_bytes_compressed_with_identity(P.to_bytes(32, "little"))
 
 
 class MixedOrderTests(unittest.TestCase):

@@ -21,7 +21,7 @@ from ed25519lab.ecdh import ecdh_ed25519
 from ed25519lab.ed25519 import FE, GE, B, Scalar, _mul_int, _recover_x
 from ed25519lab.internal_sig import internal_sign, internal_verify
 from ed25519lab.keys import pubkey_gen
-from ed25519lab.util import domain_hash
+from ed25519lab.util import tagged_hash
 
 L = Scalar.SIZE
 P = FE.SIZE
@@ -91,7 +91,7 @@ def main() -> None:
 
     # --- protocol-level ---
     bench("protocol", "pubkey_gen", lambda: pubkey_gen(a.to_bytes()))
-    bench("protocol", "domain_hash of 32 B", lambda: domain_hash("bench", b"\x00" * 32))
+    bench("protocol", "tagged_hash of 32 B", lambda: tagged_hash("bench", b"\x00" * 32))
     sk = a.to_bytes()
     pk = pubkey_gen(sk)
     sig = internal_sign(b"msg", sk)

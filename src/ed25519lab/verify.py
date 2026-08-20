@@ -33,12 +33,11 @@ def ed25519_verify(msg: bytes, pubkey: bytes, sig: bytes) -> bool:
     would give the permissive verifier. Solana enforces the cofactorless
     equation, so that is what this is.
 
-    WHY .infinity IS THE ONLY SMALL-ORDER CHECK LEFT. ed25519-dalek's
-    verify_strict rejects A and R that are of small order, and its
-    is_small_order() is true for all eight torsion points, the identity
-    included. Here GE.from_bytes_compressed has already rejected the seven
-    non-neutral ones, so the identity is the only small-order element that can
-    still reach this line.
+    SMALL ORDER, INCLUDING THE IDENTITY. ed25519-dalek's verify_strict rejects A
+    and R of small order, and its is_small_order() is true for all eight torsion
+    points, the identity included. GE.from_bytes_compressed rejects the seven
+    non-identity ones via the subgroup check and the identity explicitly, so all
+    eight are refused at parse time and nothing further is needed here.
 
     NOT A MODEL OF WHAT SOLANA ACCEPTS -- read this before using it as an oracle.
 
@@ -63,8 +62,6 @@ def ed25519_verify(msg: bytes, pubkey: bytes, sig: bytes) -> bool:
         r = GE.from_bytes_compressed(sig[0:32])
         s = Scalar.from_bytes_checked(sig[32:64])
     except ValueError:
-        return False
-    if a.infinity or r.infinity:
         return False
 
     e = Scalar.from_bytes_wide(hash_sha512(sig[0:32] + pubkey + msg))

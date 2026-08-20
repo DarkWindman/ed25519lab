@@ -40,7 +40,7 @@ extra entropy.
 """
 
 from .ed25519 import GE, B, Scalar
-from .util import domain_hash
+from .util import tagged_hash
 
 __all__ = ["TAG_CHALLENGE", "TAG_NONCE", "internal_sign", "internal_verify"]
 
@@ -74,14 +74,14 @@ def internal_sign(msg: bytes, seckey: bytes, aux: bytes = NO_AUX) -> bytes:
     a = d * B
     assert not a.infinity
 
-    k = Scalar.from_bytes_wide(domain_hash(TAG_NONCE, d.to_bytes(), aux, msg))
+    k = Scalar.from_bytes_wide(tagged_hash(TAG_NONCE, d.to_bytes(), aux, msg))
     if k == 0:
         raise RuntimeError("Failure. This happens only with negligible probability.")
     r = k * B
     assert not r.infinity
 
     e = Scalar.from_bytes_wide(
-        domain_hash(TAG_CHALLENGE, r.to_bytes_compressed(), a.to_bytes_compressed(), msg)
+        tagged_hash(TAG_CHALLENGE, r.to_bytes_compressed(), a.to_bytes_compressed(), msg)
     )
     s = k + e * d
     sig = r.to_bytes_compressed() + s.to_bytes()
@@ -102,13 +102,10 @@ def internal_verify(msg: bytes, pubkey: bytes, sig: bytes) -> bool:
     equation across the whole protocol and matches what Solana enforces for the
     final aggregate signature.
 
-    IDENTITY POLICY -- this is a call site, so the decision is made here and
-    written down rather than hidden in the decoder. Both A and R are rejected if
-    they are the neutral element. A is [d]B with d nonzero and R is [k]B with k
-    nonzero, so neither can legitimately be the identity; seeing one means the
-    signer is broken or malicious. (Confirm this reading against the spec: it
-    states the identity policy for FROST's aggregate R, but not for internal
-    signatures.)
+    IDENTITY. A is [d]B with d nonzero and R is [k]B with k nonzero, so neither
+    can legitimately be the identity here; an identity means a broken or
+    malicious signer. from_bytes_compressed already refuses it, so this function
+    needs no separate check -- the rejection lands in the except below.
     """
     if len(pubkey) != 32:
         raise ValueError("The public key must be a 32-byte array.")
@@ -120,8 +117,6 @@ def internal_verify(msg: bytes, pubkey: bytes, sig: bytes) -> bool:
         s = Scalar.from_bytes_checked(sig[32:64])
     except ValueError:
         return False
-    if a.infinity or r.infinity:
-        return False
 
-    e = Scalar.from_bytes_wide(domain_hash(TAG_CHALLENGE, sig[0:32], pubkey, msg))
+    e = Scalar.from_bytes_wide(tagged_hash(TAG_CHALLENGE, sig[0:32], pubkey, msg))
     return s * B == r + e * a

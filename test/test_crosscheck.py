@@ -178,23 +178,27 @@ class LibsodiumCrossCheck(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     GE.from_bytes_compressed(enc)
 
-    def test_KNOWN_DIVERGENCE_libsodium_rejects_the_neutral_element(self):
-        """The one row where libsodium is NOT a valid oracle for us.
+    def test_we_now_agree_with_libsodium_on_the_neutral_element(self):
+        """This used to be the one row where libsodium was not a valid oracle.
 
-        crypto_core_ed25519_is_valid_point is documented as accepting only
-        points "on the main subgroup" that "do not have a small order" -- and
-        the neutral element has order 1, so libsodium rejects it. We accept it:
-        it is a legitimate element of the prime-order subgroup, and the identity
-        policy lives at each call site rather than in the decoder.
+        crypto_core_ed25519_is_valid_point accepts only points "on the main
+        subgroup" that "do not have a small order", and the identity has order
+        one, so libsodium refuses it. We used to accept it in
+        from_bytes_compressed and push the decision to each call site. Since the
+        decoder was split, from_bytes_compressed refuses it too and the
+        divergence is gone -- libsodium is now a clean oracle for the default
+        decoder on every input class.
 
-        This is a semantic difference, not a bug on either side, but it must be
-        pinned: any future test that loops libsodium over our vectors has to
-        special-case this one, or it will report a false divergence.
+        The permissive variant still accepts it, which is the whole point of
+        having two: the identity is a real element of the prime-order subgroup,
+        it just is not a valid value at most call sites.
         """
         neutral = GE().to_bytes_compressed()
         self.assertEqual(neutral, b"\x01" + b"\x00" * 31)
         self.assertFalse(sodium.crypto_core_ed25519_is_valid_point(neutral))
-        self.assertTrue(GE.from_bytes_compressed(neutral).infinity)
+        with self.assertRaises(ValueError):
+            GE.from_bytes_compressed(neutral)
+        self.assertTrue(GE.from_bytes_compressed_with_identity(neutral).infinity)
         self.assertTrue(GE().in_prime_order_subgroup())
 
 
@@ -207,7 +211,7 @@ class ProtocolCrossCheck(unittest.TestCase):
         """The KDF is ours, but the shared point underneath must be standard."""
         from ed25519lab.ecdh import TAG_ECDH, ecdh_ed25519
         from ed25519lab.keys import pubkey_gen
-        from ed25519lab.util import domain_hash
+        from ed25519lab.util import tagged_hash
 
         for _ in range(10):
             sk_a, sk_b = rand_scalar().to_bytes(), rand_scalar().to_bytes()
@@ -219,7 +223,7 @@ class ProtocolCrossCheck(unittest.TestCase):
                 sodium.crypto_scalarmult_ed25519_noclamp(sk_b, pk_a),
             )
             expected = Scalar.from_bytes_wide(
-                domain_hash(TAG_ECDH, shared, pk_a, pk_b, b"ctx")
+                tagged_hash(TAG_ECDH, shared, pk_a, pk_b, b"ctx")
             )
             self.assertEqual(ecdh_ed25519(sk_a, pk_b, b"ctx", sending=True), expected)
             self.assertEqual(ecdh_ed25519(sk_b, pk_a, b"ctx", sending=False), expected)
